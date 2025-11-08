@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from "@google/genai";
@@ -30,7 +30,7 @@ interface StudyPlanRequestBody {
   uploadedFiles: { name: string }[];
 }
 
-app.post('/api/generate-study-plan', async (req: Request<{}, {}, StudyPlanRequestBody>, res: Response) => {
+app.post('/api/generate-study-plan', async (req: express.Request<{}, {}, StudyPlanRequestBody>, res: express.Response) => {
   const { hoursPerWeek, startDate, deadline, weakTopics, uploadedFiles } = req.body;
 
   if (!hoursPerWeek || !startDate || !deadline || !weakTopics) {
@@ -102,7 +102,7 @@ app.post('/api/generate-study-plan', async (req: Request<{}, {}, StudyPlanReques
   }
 });
 
-app.get('/api/health', (req: Request, res: Response) => {
+app.get('/api/health', (req: express.Request, res: express.Response) => {
     res.json({ status: 'ok', message: 'Backend is running' });
 });
 

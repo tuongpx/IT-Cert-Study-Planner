@@ -1,4 +1,4 @@
-# Hướng dẫn Triển khai & Bảo mật (Mô hình Frontend/Backend)
+# Hướng dẫn Triển khai
 
 ## Tổng quan Dự án
 
@@ -70,62 +70,11 @@ Chúng ta sẽ tạo hai image Docker: một cho backend và một cho frontend,
 
 #### Bước 1: Tạo `docker/backend.Dockerfile`
 
-Dockerfile này sử dụng multi-stage build để tạo một image Node.js nhẹ, chỉ chứa các tệp cần thiết để chạy ứng dụng trong môi trường production.
-
-```dockerfile
-# docker/backend.Dockerfile
-
-# Giai đoạn 1: Cài đặt dependencies
-FROM node:18-alpine AS deps
-WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm install --production
-
-# Giai đoạn 2: Build code TypeScript
-FROM node:18-alpine AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN npm run build
-
-# Giai đoạn 3: Chạy ứng dụng production
-FROM node:18-alpine AS runner
-WORKDIR /app
-# Sao chép các dependencies đã cài đặt và mã nguồn đã build
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-# (Tùy chọn) Sao chép file .env nếu bạn quản lý secrets theo cách này
-# COPY .env .
-EXPOSE 5001
-CMD ["node", "dist/app.js"]
-```
+Dockerfile này sử dụng multi-stage build để tạo một image Node.js nhẹ, chỉ chứa các tệp cần thiết để chạy ứng dụng trong môi trường production. (Nội dung file được cung cấp trong `docker/backend.Dockerfile`).
 
 #### Bước 2: Tạo `docker/frontend.Dockerfile`
 
-Dockerfile này sử dụng multi-stage build để tạo ra một image Nginx nhẹ nhàng chỉ chứa các tệp tĩnh của ứng dụng React.
-
-```dockerfile
-# docker/frontend.Dockerfile
-
-# Giai đoạn 1: Build ứng dụng React
-FROM node:18-alpine AS build
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-# Sao chép toàn bộ context, bao gồm cả thư mục src/ và public/
-COPY . .
-# Tạo bản build production
-RUN npm run build
-
-# Giai đoạn 2: Phục vụ ứng dụng bằng Nginx
-FROM nginx:stable-alpine
-# Sao chép các tệp build tĩnh từ giai đoạn trước
-COPY --from=build /app/dist /usr/share/nginx/html
-# (Tùy chọn) Sao chép cấu hình Nginx để proxy các request API đến backend
-# COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
-```
+Dockerfile này sử dụng multi-stage build để tạo ra một image Nginx nhẹ nhàng chỉ chứa các tệp tĩnh của ứng dụng React. (Nội dung file được cung cấp trong `docker/frontend.Dockerfile`).
 
 #### Bước 3: Build và Đẩy các Image
 
@@ -145,6 +94,38 @@ docker login
 docker push your-dockerhub-user/study-planner-backend:latest
 docker push your-dockerhub-user/study-planner-frontend:latest
 ```
+
+#### Bước 4: Chạy Container cục bộ để Kiểm tra (Tùy chọn)
+
+Trước khi triển khai lên Kubernetes, bạn có thể chạy các container trên máy cục bộ để đảm bảo chúng hoạt động chính xác.
+
+1.  **Tạo một Docker network:**
+    Điều này cho phép các container giao tiếp với nhau bằng tên.
+    ```bash
+    docker network create study-net
+    ```
+
+2.  **Chạy container backend:**
+    Chúng ta sẽ chạy backend và kết nối nó vào network vừa tạo.
+    ```bash
+    docker run -d --name study-backend --network study-net \
+      -e API_KEY="YOUR_GEMINI_API_KEY" \
+      your-dockerhub-user/study-planner-backend:latest
+    ```
+    *   `-d`: Chạy container ở chế độ detached (chạy nền).
+    *   `--name study-backend`: Đặt tên cho container là `study-backend`.
+    *   `--network study-net`: Kết nối container vào `study-net`.
+    *   `-e API_KEY=...`: Truyền API key dưới dạng biến môi trường. **Lưu ý:** Đây chỉ là cách làm cho môi trường phát triển. Không bao giờ hardcode key trong production.
+
+3.  **Chạy container frontend:**
+    ```bash
+    docker run -d --name study-frontend --network study-net \
+      -p 8080:80 \
+      your-dockerhub-user/study-planner-frontend:latest
+    ```
+    *   `-p 8080:80`: Ánh xạ cổng 80 của container (Nginx) sang cổng 8080 trên máy host của bạn.
+
+Bây giờ bạn có thể truy cập ứng dụng frontend tại `http://localhost:8080`. Tuy nhiên, các lời gọi API từ frontend đến backend sẽ thất bại vì mã nguồn frontend đang trỏ đến `localhost:5001`, trong khi backend đang chạy bên trong một container khác. Để giải quyết vấn đề này cho môi trường phát triển cục bộ, bạn có thể cấu hình Nginx trong container frontend để proxy các request `/api` đến `http://study-backend:5001`. Đây là phương pháp được khuyến nghị cho production.
 
 ---
 
