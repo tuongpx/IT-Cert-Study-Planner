@@ -1,0 +1,28 @@
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+  namespace: study-planner
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend-container
+        image: your-dockerhub-user/study-planner-backend:latest
+        ports:
+        - containerPort: 5001
+        env:
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: gemini-api-secret
+              key: apiKey
+```
