@@ -14,10 +14,12 @@
 IT-study-planner/
 ├── backend/
 │   ├── src/
-│   │   └── app.py
-│   └── requirements.txt
+│   │   └── app.tsx
+│   ├── package.json
+│   └── tsconfig.json
 ├── frontend/
 │   ├── src/
+│   │   └── App.tsx
 │   ├── public/
 │   └── package.json
 ├── docker/
@@ -40,6 +42,27 @@ IT-study-planner/
 -   **`k8s/`**: Chứa tất cả các tệp manifest của Kubernetes để triển khai.
 
 ---
+## Mã nguồn Ứng dụng
+
+Phần này cung cấp mã nguồn cốt lõi cho cả backend và frontend. Mã nguồn chi tiết có thể được tìm thấy trong các thư mục tương ứng của dự án.
+
+### Backend (Node.js/Express)
+
+#### `backend/package.json`
+Tệp này định nghĩa các dependencies (Express, Google GenAI SDK, CORS) và các scripts cần thiết để chạy và build backend TypeScript.
+
+#### `backend/src/app.tsx`
+Một API backend được xây dựng bằng Express, chịu trách nhiệm xử lý logic nghiệp vụ và giao tiếp an toàn với Gemini API. Việc đặt logic này ở backend giúp bảo vệ API Key không bị lộ ra phía client.
+
+### Frontend (React & TypeScript)
+
+#### `frontend/package.json`
+Tệp này định nghĩa các dependencies và scripts cần thiết để build ứng dụng React. Nội dung chi tiết có trong tệp `frontend/package.json`.
+
+#### `frontend/src/App.tsx`
+Đây là component chính của ứng dụng, quản lý trạng thái, điều hướng và hiển thị các trang khác nhau. Mã nguồn đầy đủ nằm trong tệp `frontend/src/App.tsx`.
+
+---
 
 ## 1. Hướng dẫn Triển khai với Docker
 
@@ -47,32 +70,34 @@ Chúng ta sẽ tạo hai image Docker: một cho backend và một cho frontend,
 
 #### Bước 1: Tạo `docker/backend.Dockerfile`
 
-Dockerfile này cài đặt dependencies và sao chép mã nguồn từ thư mục `src/` vào image.
+Dockerfile này sử dụng multi-stage build để tạo một image Node.js nhẹ, chỉ chứa các tệp cần thiết để chạy ứng dụng trong môi trường production.
 
 ```dockerfile
 # docker/backend.Dockerfile
 
-# Giai đoạn 1: Sử dụng một image Python chính thức
-FROM python:3.9-slim AS base
+# Giai đoạn 1: Cài đặt dependencies
+FROM node:18-alpine AS deps
 WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm install --production
 
-# Tạo môi trường ảo để cô lập dependencies
-ENV VIRTUAL_ENV=/opt/venv
-RUN python3 -m venv $VIRTUAL_ENV
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+# Giai đoạn 2: Build code TypeScript
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npm run build
 
-# Cài đặt các thư viện cần thiết
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Sao chép mã nguồn ứng dụng từ thư mục src
-COPY ./src .
-
-# Mở cổng mà Gunicorn sẽ chạy
-EXPOSE 5000
-
-# Lệnh để chạy ứng dụng trong môi trường production
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+# Giai đoạn 3: Chạy ứng dụng production
+FROM node:18-alpine AS runner
+WORKDIR /app
+# Sao chép các dependencies đã cài đặt và mã nguồn đã build
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+# (Tùy chọn) Sao chép file .env nếu bạn quản lý secrets theo cách này
+# COPY .env .
+EXPOSE 5001
+CMD ["node", "dist/app.js"]
 ```
 
 #### Bước 2: Tạo `docker/frontend.Dockerfile`
@@ -173,7 +198,7 @@ spec:
       - name: backend-container
         image: your-dockerhub-user/study-planner-backend:latest
         ports:
-        - containerPort: 5000
+        - containerPort: 5001
         env:
         - name: API_KEY
           valueFrom:
@@ -196,7 +221,7 @@ spec:
   ports:
     - protocol: TCP
       port: 80
-      targetPort: 5000
+      targetPort: 5001
   type: ClusterIP
 ```
 
