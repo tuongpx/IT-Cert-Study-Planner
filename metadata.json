@@ -1,0 +1,5 @@
+{
+  "name": "IT Cert Study Planner",
+  "description": "An intelligent, responsive web application to help users create personalized study plans for IT certifications, upload materials, and track their progress using AI-powered insights.",
+  "requestFramePermissions": []
+}
