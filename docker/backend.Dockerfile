@@ -1,4 +1,3 @@
-```dockerfile
 # docker/backend.Dockerfile
 
 # Giai đoạn 1: Cài đặt dependencies
@@ -24,4 +23,3 @@ COPY --from=builder /app/dist ./dist
 # COPY .env .
 EXPOSE 5001
 CMD ["node", "dist/app.js"]
-```
